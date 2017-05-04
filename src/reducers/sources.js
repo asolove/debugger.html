@@ -233,9 +233,7 @@ function getNewSelectedSourceId(state: SourcesState, availableTabs): string {
     return "";
   }
 
-  const selectedTab = state.sources.find(
-    source => source.get("id") == selectedLocation.sourceId
-  );
+  const selectedTab = state.sources.get(selectedLocation.sourceId);
 
   const selectedTabUrl = selectedTab ? selectedTab.get("url") : "";
 
@@ -280,6 +278,40 @@ function getNewSelectedSourceId(state: SourcesState, availableTabs): string {
 // pick off the piece of state we're interested in. It's impossible
 // (right now) to type those wrapped functions.
 type OuterState = { sources: Record<SourcesState> };
+
+// If you need to use Sources as reference data, but don't want to update
+// just because a new source was added, you can use this. You need to be
+// sure you will never want your calculated value to be updated when a source
+// is added/removed. Otherwise you are going to get weird bugs.
+export const createSelectorWithSources = (...funcs) => {
+  const resultFunc = funcs.pop();
+  const length = funcs.length;
+
+  let lastAnswer = undefined;
+  let lastParams = [];
+
+  return state => {
+    const params = [];
+
+    for (let i = 0; i < length; i++) {
+      params.push(funcs[i].call(null, state));
+    }
+
+    let changed = false;
+    for (let i = 0; i < length; i++) {
+      if (params[i] !== lastParams[i]) {
+        changed = true;
+      }
+    }
+
+    if (lastAnswer === undefined || changed) {
+      lastParams = params;
+      params.push(getSources(state));
+      lastAnswer = resultFunc.apply(null, params);
+    }
+    return lastAnswer;
+  };
+};
 
 const getSourcesState = state => state.sources;
 
@@ -328,15 +360,13 @@ export const getSources = createSelector(
 
 const getTabs = createSelector(getSourcesState, sources => sources.tabs);
 
-export const getSourceTabs = createSelector(
+export const getSourceTabs = createSelectorWithSources(
   getTabs,
-  getSources,
   (tabs, sources) => tabs.filter(tab => getSourceByUrlInSources(sources, tab))
 );
 
-export const getSourcesForTabs = createSelector(
+export const getSourcesForTabs = createSelectorWithSources(
   getSourceTabs,
-  getSources,
   (tabs: TabList, sources: SourcesMap) => {
     return tabs
       .map(tab => getSourceByUrlInSources(sources, tab))
@@ -349,17 +379,14 @@ export const getSelectedLocation = createSelector(
   sources => sources.selectedLocation
 );
 
-export const getSelectedSource = createSelector(
+export const getSelectedSource = createSelectorWithSources(
   getSelectedLocation,
-  getSources,
   (selectedLocation, sources) => {
     if (!selectedLocation) {
       return;
     }
 
-    return sources.find(
-      source => source.get("id") == selectedLocation.sourceId
-    );
+    return sources.get(selectedLocation.sourceId);
   }
 );
 
