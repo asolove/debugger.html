@@ -285,44 +285,20 @@ type OuterState = { sources: Record<SourcesState> };
 // just because a new source was added, you can use this. You need to be
 // sure you will never want your calculated value to be updated when a source
 // is added/removed. Otherwise you are going to get weird bugs.
-
-type CreateSelectorWithSourcesArgs<T1, T2, Result> =
-  | [(State) => T1, (arg1: T1, arg2: SourcesMap) => Result]
-  | [
-    (State) => T1,
-    (State) => T2,
-    (arg1: T1, arg2: T2, arg3: SourcesMap) => Result
-  ];
-
-export function createSelectorWithSources<T1, T2, Result>(
-  ...funcs: CreateSelectorWithSourcesArgs<T1, T2, Result>
+export function createSelectorWithSources<T1, Result>(
+  selector: State => T1,
+  combiner: (arg1: T1, arg2: SourcesMap) => Result
 ): State => Result {
-  const resultFunc = funcs.pop();
-  const length = funcs.length;
-
-  let lastAnswer = undefined;
-  let lastParams = [];
+  let lastResult = undefined;
+  let lastArg = [];
 
   return state => {
-    const params = [];
-
-    for (let i = 0; i < length; i++) {
-      params.push(funcs[i].call(null, state));
+    let arg = selector(state);
+    if (!lastResult || arg !== lastArg) {
+      lastArg = arg;
+      lastResult = combiner(arg, getSources(state));
     }
-
-    let changed = false;
-    for (let i = 0; i < length; i++) {
-      if (params[i] !== lastParams[i]) {
-        changed = true;
-      }
-    }
-
-    if (lastAnswer === undefined || changed) {
-      lastParams = params;
-      params.push(getSources(state));
-      lastAnswer = resultFunc.apply(null, params);
-    }
-    return lastAnswer;
+    return lastResult;
   };
 }
 
@@ -358,7 +334,10 @@ export function getPrettySource(state: OuterState, id: string) {
   return getSourceByURL(state, getPrettySourceURL(source.get("url")));
 }
 
-function getSourceByUrlInSources(sources: SourcesMap, url: string) {
+function getSourceByUrlInSources(
+  sources: SourcesMap,
+  url: string
+): ?SourceRecord {
   return sources.find(source => source.get("url") === url);
 }
 
@@ -386,9 +365,12 @@ export const getSourcesForTabs: State => List<
 > = createSelectorWithSources(
   getSourceTabs,
   (tabs: TabList, sources: SourcesMap) => {
-    return tabs
-      .map(tab => getSourceByUrlInSources(sources, tab))
-      .filter(source => source);
+    let tabSources: List<SourceRecord> = I.List();
+    tabs.forEach(tab => {
+      let source = getSourceByUrlInSources(sources, tab);
+      if (source) tabSources.push(source);
+    });
+    return tabSources;
   }
 );
 
