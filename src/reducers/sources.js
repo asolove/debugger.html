@@ -285,18 +285,18 @@ type OuterState = { sources: Record<SourcesState> };
 // just because a new source was added, you can use this. You need to be
 // sure you will never want your calculated value to be updated when a source
 // is added/removed. Otherwise you are going to get weird bugs.
-declare function createSelectorWithSources<T1, Result>(
-  selector1: (State) => T1,
-  combiner: (arg1: T1, arg2: SourcesMap) => Result
-): State => Result;
 
-declare function createSelectorWithSources<T1, T2, Result>(
-  selector1: (State) => T1,
-  selector2: (State) => T2,
-  combiner: (arg1: T1, arg2: T2, arg3: SourcesMap) => Result
-): State => Result;
+type CreateSelectorWithSourcesArgs<T1, T2, Result> =
+  | [(State) => T1, (arg1: T1, arg2: SourcesMap) => Result]
+  | [
+    (State) => T1,
+    (State) => T2,
+    (arg1: T1, arg2: T2, arg3: SourcesMap) => Result
+  ];
 
-export function createSelectorWithSources(...funcs) {
+export function createSelectorWithSources<T1, T2, Result>(
+  ...funcs: CreateSelectorWithSourcesArgs<T1, T2, Result>
+): State => Result {
   const resultFunc = funcs.pop();
   const length = funcs.length;
 
@@ -397,7 +397,7 @@ export const getSelectedLocation = createSelector(
   sources => sources.selectedLocation
 );
 
-export const getSelectedSource: State => ?SourceRecord = createSelectorWithSources(
+export const getSelectedSource = createSelectorWithSources(
   getSelectedLocation,
   (selectedLocation, sources) => {
     if (!selectedLocation) {
