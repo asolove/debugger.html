@@ -11,6 +11,13 @@ import pause from "./pause";
 import ui from "./ui";
 import coverage from "./coverage";
 
+import type { SourcesState } from "./sources";
+
+export type State = {
+  sources: SourcesState
+  // FIXME: add the rest as they get types
+};
+
 export default {
   expressions,
   eventListeners,

@@ -19,6 +19,8 @@ import type { Source, SourceText, Location } from "../types";
 import type { Action } from "../actions/types";
 import type { Record } from "../utils/makeRecord";
 
+import type { State } from "./index";
+
 type Tab = string;
 export type SourceRecord = Record<Source>;
 export type SourceTextRecord = Record<SourceText>;
@@ -43,7 +45,7 @@ export type SourcesState = {
   tabs: TabList
 };
 
-export const State = makeRecord(
+export const initState = makeRecord(
   ({
     sources: I.Map(),
     selectedLocation: undefined,
@@ -54,7 +56,7 @@ export const State = makeRecord(
 );
 
 function update(
-  state: Record<SourcesState> = State(),
+  state: Record<SourcesState> = initState(),
   action: Action
 ): Record<SourcesState> {
   let availableTabs = null;
@@ -134,7 +136,7 @@ function update(
       const source = getSelectedSource({ sources: state });
       const url = source && source.get("url");
       prefs.pendingSelectedLocation = { url };
-      return State().set("pendingSelectedLocation", { url });
+      return initState().set("pendingSelectedLocation", { url });
   }
 
   return state;
@@ -283,7 +285,18 @@ type OuterState = { sources: Record<SourcesState> };
 // just because a new source was added, you can use this. You need to be
 // sure you will never want your calculated value to be updated when a source
 // is added/removed. Otherwise you are going to get weird bugs.
-export const createSelectorWithSources = (...funcs) => {
+declare function createSelectorWithSources<T1, Result>(
+  selector1: (State) => T1,
+  combiner: (arg1: T1, arg2: SourcesMap) => Result
+): State => Result;
+
+declare function createSelectorWithSources<T1, T2, Result>(
+  selector1: (State) => T1,
+  selector2: (State) => T2,
+  combiner: (arg1: T1, arg2: T2, arg3: SourcesMap) => Result
+): State => Result;
+
+export function createSelectorWithSources(...funcs) {
   const resultFunc = funcs.pop();
   const length = funcs.length;
 
@@ -311,11 +324,11 @@ export const createSelectorWithSources = (...funcs) => {
     }
     return lastAnswer;
   };
-};
+}
 
-const getSourcesState = state => state.sources;
+const getSourcesState: State => SourcesState = state => state.sources;
 
-export function getSource(state: OuterState, id: string) {
+export function getSource(state: OuterState, id: string): SourceRecord {
   return getSourceInSources(getSources(state), id);
 }
 
@@ -349,7 +362,10 @@ function getSourceByUrlInSources(sources: SourcesMap, url: string) {
   return sources.find(source => source.get("url") === url);
 }
 
-export function getSourceInSources(sources: SourcesMap, id: string) {
+export function getSourceInSources(
+  sources: SourcesMap,
+  id: string
+): SourceRecord {
   return sources.get(id);
 }
 
@@ -360,12 +376,14 @@ export const getSources = createSelector(
 
 const getTabs = createSelector(getSourcesState, sources => sources.tabs);
 
-export const getSourceTabs = createSelectorWithSources(
+export const getSourceTabs: State => TabList = createSelectorWithSources(
   getTabs,
   (tabs, sources) => tabs.filter(tab => getSourceByUrlInSources(sources, tab))
 );
 
-export const getSourcesForTabs = createSelectorWithSources(
+export const getSourcesForTabs: State => List<
+  SourceRecord
+> = createSelectorWithSources(
   getSourceTabs,
   (tabs: TabList, sources: SourcesMap) => {
     return tabs
@@ -379,7 +397,7 @@ export const getSelectedLocation = createSelector(
   sources => sources.selectedLocation
 );
 
-export const getSelectedSource = createSelectorWithSources(
+export const getSelectedSource: State => ?SourceRecord = createSelectorWithSources(
   getSelectedLocation,
   (selectedLocation, sources) => {
     if (!selectedLocation) {
